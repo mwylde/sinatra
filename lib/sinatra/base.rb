@@ -395,6 +395,8 @@ module Sinatra
   #                   object rather than the application instance.
   #   :views          Views directory to use.
   module Templates
+    class TemplateError < StandardError; end
+    
     module ContentTyped
       attr_accessor :content_type
     end
@@ -517,8 +519,14 @@ module Sinatra
       # compile and render template
       layout_was      = @default_layout
       @default_layout = false
-      template        = compile_template(engine, data, options, views)
-      output          = template.render(scope, locals, &block)
+
+      begin
+        template        = compile_template(engine, data, options, views)
+        output          = template.render(scope, locals, &block)
+      rescue => e
+        raise TemplateError.new("#{data} - #{e.message}")
+      end
+
       @default_layout = layout_was
 
       # render layout
@@ -816,7 +824,11 @@ module Sinatra
     end
 
     def dump_errors!(boom)
-      msg = ["#{boom.class} - #{boom.message}:", *boom.backtrace].join("\n\t")
+      if boom.is_a? Templates::TemplateError
+        msg = boom.message
+      else
+        msg = ["#{boom.class} - #{boom.message}:", *boom.backtrace].join("\n\t")
+      end
       @env['rack.errors'].puts(msg)
     end
 
